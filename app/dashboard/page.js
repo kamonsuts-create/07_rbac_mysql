@@ -1,451 +1,554 @@
-
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import PlukrakNavbar from "@/components/PlukrakNavbar";
+import PlukrakFooter from "@/components/PlukrakFooter";
+
+const emptyForm = {
+  name: "",
+  category: "other",
+  description: "",
+  price: "",
+  stock: "",
+  unit: "กิโลกรัม",
+  image_url: "",
+  status: "available",
+};
 
 export default function DashboardPage() {
-  const [user, setUser] = useState(null);
+  const router = useRouter();
+
+  const [products, setProducts] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
   const [permissions, setPermissions] = useState([]);
+  const [userLoading, setUserLoading] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState(emptyForm);
+
+  const can = (permission) => permissions.includes("*") || permissions.includes(permission);
+  const canCreate = can("products:create");
+  const canUpdate = can("products:update");
+  const canDelete = can("products:delete");
 
   useEffect(() => {
-    async function loadUser() {
+    async function fetchCurrentUser() {
       try {
-        const response = await fetch("/api/me");
-        const data = await response.json();
+        const res = await fetch("/api/me", { cache: "no-store" });
+        const data = await res.json();
 
-        if (!response.ok) {
-          window.location.href = "/login";
-          return;
+        if (!res.ok) {
+          if (res.status === 401) {
+            router.replace("/login");
+            return;
+          }
+          throw new Error(data.message || "ไม่สามารถตรวจสอบสิทธิ์ผู้ใช้ได้");
         }
 
-        setUser(data.user);
-        setPermissions(data.permissions || []);
-      } catch {
-        setError("ไม่สามารถโหลดข้อมูลผู้ใช้ได้");
+        setCurrentUser(data.user || null);
+        setPermissions(Array.isArray(data.permissions) ? data.permissions : []);
+      } catch (err) {
+        setError(err.message || "ไม่สามารถตรวจสอบสิทธิ์ผู้ใช้ได้");
       } finally {
-        setLoading(false);
+        setUserLoading(false);
       }
     }
 
-    loadUser();
+    fetchCurrentUser();
+  }, [router]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const linked = params.get("google_linked");
+    const linkError = params.get("google_link_error");
+
+    if (linked === "1") {
+      setMessage("เชื่อมต่อบัญชี Google สำเร็จเรียบร้อยแล้ว");
+    } else if (linkError) {
+      setError("ไม่สามารถเชื่อมต่อบัญชี Google ได้ กรุณาลองใหม่อีกครั้ง");
+    }
   }, []);
 
-  async function logout() {
-    await fetch("/api/logout", { method: "POST" });
-    window.location.href = "/login";
+  const fetchProducts = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const res = await fetch("/api/products", { cache: "no-store" });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "ไม่สามารถโหลดสินค้าได้");
+      }
+
+      setProducts(data.products || []);
+    } catch (err) {
+      setError(err.message || "เกิดข้อผิดพลาดในการโหลดสินค้า");
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
+
+  function openAddForm() {
+    if (!canCreate) return;
+    setEditingId(null);
+    setForm(emptyForm);
+    setError("");
+    setMessage("");
+    setShowForm(true);
+    window.scrollTo({ top: 300, behavior: "smooth" });
   }
 
-  const can = (permission) =>
-    permissions.includes("*") || permissions.includes(permission);
-
-  const role = user?.role || "";
-  const roleLabel = user?.roleName || role;
-
-  const menu = [
-    { label: "Dashboard", href: "/dashboard", icon: "⌂", show: true },
-    { label: "จัดการข่าว", href: "/app/admin/news", icon: "▤", show: can("news:read") },
-    { label: "จัดการผู้ใช้งาน", href: "/admin/users", icon: "♙", show: can("users:read") || can("user:manage") },
-    { label: "หน้าข่าว", href: "/news", icon: "◉", show: true },
-  ];
-
-  if (loading) {
-    return <div style={styles.loading}>กำลังโหลดข้อมูล...</div>;
+  function openEditForm(product) {
+    if (!canUpdate) return;
+    setEditingId(product.id);
+    setForm({
+      name: product.name || "",
+      category: product.category || "other",
+      description: product.description || "",
+      price: product.price ?? "",
+      stock: product.stock ?? product.quantity ?? "",
+      unit: product.unit || "กิโลกรัม",
+      image_url: product.image_url || "",
+      status: product.status || "available",
+    });
+    setError("");
+    setMessage("");
+    setShowForm(true);
+    window.scrollTo({ top: 300, behavior: "smooth" });
   }
 
-  if (error) {
-    return <div style={styles.loading}>{error}</div>;
+  function handleChange(event) {
+    const { name, value } = event.target;
+    setForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+
+    if (editingId !== null ? !canUpdate : !canCreate) {
+      setError("คุณไม่มีสิทธิ์ดำเนินการนี้");
+      return;
+    }
+
+    if (!form.name.trim()) {
+      setError("กรุณากรอกชื่อสินค้า");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      setMessage("");
+
+      const payload = {
+        ...form,
+        name: form.name.trim(),
+        price: Number(form.price),
+        stock: Number(form.stock),
+      };
+
+      if (editingId !== null) {
+        payload.id = editingId;
+      }
+
+      const res = await fetch("/api/products", {
+        method: editingId !== null ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "ไม่สามารถบันทึกสินค้าได้");
+      }
+
+      setMessage(data.message || "บันทึกสินค้าสำเร็จเรียบร้อย");
+      setShowForm(false);
+      setEditingId(null);
+      setForm(emptyForm);
+
+      await fetchProducts();
+    } catch (err) {
+      setError(err.message || "เกิดข้อผิดพลาดในการบันทึกสินค้า");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(product) {
+    if (!canDelete) return;
+
+    const confirmed = window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบสินค้า "${product.name}"?`);
+    if (!confirmed) return;
+
+    try {
+      setError("");
+      setMessage("");
+
+      const res = await fetch("/api/products", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: product.id }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "ไม่สามารถลบสินค้าได้");
+      }
+
+      setMessage(data.message || "ลบสินค้าสำเร็จเรียบร้อย");
+      await fetchProducts();
+    } catch (err) {
+      setError(err.message || "เกิดข้อผิดพลาดในการลบสินค้า");
+    }
+  }
+
+  if (userLoading) {
+    return (
+      <div className="min-h-screen flex flex-col justify-between bg-[#f6f4eb]">
+        <PlukrakNavbar />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-10 h-10 border-4 border-[#2f8239] border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm font-bold text-[#2e4732]">กำลังโหลดแดชบอร์ดสมาชิกปลูกรัก...</p>
+          </div>
+        </main>
+        <PlukrakFooter />
+      </div>
+    );
   }
 
   return (
-    <div style={styles.app}>
-      <aside style={styles.sidebar}>
-        <div style={styles.brand}>
-          <div style={styles.brandIcon}>R</div>
-          <div>
-            <strong>RBAC SYSTEM</strong>
-            <small>Management Portal</small>
-          </div>
-        </div>
+    <div className="min-h-screen flex flex-col justify-between bg-[#f6f4eb] text-[#152e1c]">
+      <PlukrakNavbar />
 
-        <p style={styles.menuTitle}>เมนูหลัก</p>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 flex-1 w-full space-y-6 sm:space-y-8">
+        
+        {/* User Greeting & Status Card */}
+        <section className="bg-white rounded-[28px] sm:rounded-[32px] p-6 sm:p-8 border border-[#e2ead8] shadow-[0_8px_28px_rgba(20,60,25,0.06)] flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-center gap-5">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#2f8239] to-[#1a5622] text-white flex items-center justify-center text-3xl font-black shadow-md shrink-0">
+              {currentUser?.role === "farmer" ? "🧑‍🌾" : currentUser?.role === "admin" ? "🛡️" : "👤"}
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-black text-[#152e1c]">
+                  สวัสดี, {currentUser?.fullName || currentUser?.name || "สมาชิกปลูกรัก"}
+                </h1>
+                <span className="px-3 py-0.5 rounded-full bg-[#edf6ea] text-[#1b5e20] text-xs font-black border border-[#cbe1c3]">
+                  {currentUser?.role === "farmer"
+                    ? "เกษตรกรผู้ขาย"
+                    : currentUser?.role === "admin"
+                    ? "ผู้ดูแลระบบ"
+                    : "สมาชิกผู้บริโภค"}
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-[#5d6e5a] font-medium mt-1">
+                อีเมล: {currentUser?.email || "-"}
+              </p>
+            </div>
+          </div>
 
-        <nav>
-          {menu.filter(item => item.show).map(item => (
-            <a key={item.href} href={item.href} style={{
-              ...styles.menuItem,
-              ...(item.href === "/dashboard" ? styles.activeMenu : {})
-            }}>
-              <span style={styles.menuIcon}>{item.icon}</span>
-              {item.label}
-            </a>
-          ))}
-        </nav>
+          {/* Quick Action Navigation Buttons */}
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/"
+              className="px-5 py-2.5 rounded-full bg-[#f4f9f2] hover:bg-[#eaf4e6] text-[#1e4825] font-extrabold text-xs sm:text-sm border border-[#cfdfc8] transition"
+            >
+              🌾 เลือกซื้อผลผลิต
+            </Link>
 
-        <div style={styles.sidebarBottom}>
-          <div style={styles.avatar}>
-            {(user?.fullName || user?.email || "U").charAt(0).toUpperCase()}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <strong style={styles.userName}>{user?.fullName || user?.full_name || user?.email}</strong>
-            <small style={styles.userRole}>{roleLabel}</small>
-          </div>
-          <button onClick={logout} style={styles.logoutIcon} title="ออกจากระบบ">↪</button>
-        </div>
-      </aside>
+            {currentUser?.role === "farmer" && (
+              <Link
+                href="/farmer/products"
+                className="px-5 py-2.5 rounded-full bg-gradient-to-b from-[#2f8239] to-[#1a5622] text-white font-extrabold text-xs sm:text-sm shadow-sm transition hover:brightness-105"
+              >
+                🌾 จัดการแผงผลผลิต & บัญชีโอนตรง
+              </Link>
+            )}
 
-      <main style={styles.main}>
-        <header style={styles.header}>
-          <div>
-            <p style={styles.breadcrumb}>หน้าหลัก / Dashboard</p>
-            <h1 style={styles.heading}>Dashboard</h1>
-            <p style={styles.subheading}>ภาพรวมระบบจัดการสิทธิ์การใช้งาน</p>
-          </div>
-          <div style={styles.headerBadge}>● ระบบออนไลน์</div>
-        </header>
-
-        <section style={styles.welcome}>
-          <div>
-            <p style={styles.welcomeEyebrow}>WELCOME BACK</p>
-            <h2>ยินดีต้อนรับ {user?.fullName || user?.full_name || user?.email}</h2>
-            <p>คุณเข้าสู่ระบบในฐานะ {roleLabel}</p>
-          </div>
-          <div style={styles.welcomeIcon}>✦</div>
-        </section>
-
-        <section style={styles.cards}>
-          <div style={styles.card}>
-            <div style={styles.cardIcon}>♙</div>
-            <p>ชื่อผู้ใช้งาน</p>
-            <strong>{user?.fullName || user?.full_name || "-"}</strong>
-          </div>
-          <div style={styles.card}>
-            <div style={styles.cardIcon}>✉</div>
-            <p>อีเมล</p>
-            <strong style={styles.email}>{user?.email || "-"}</strong>
-          </div>
-          <div style={styles.card}>
-            <div style={styles.cardIcon}>◆</div>
-            <p>บทบาทของคุณ</p>
-            <strong>{roleLabel}</strong>
-          </div>
-          <div style={styles.card}>
-            <div style={styles.cardIcon}>✓</div>
-            <p>จำนวนสิทธิ์</p>
-            <strong>{permissions.length} รายการ</strong>
+            {currentUser?.role === "admin" && (
+              <Link
+                href="/admin"
+                className="px-5 py-2.5 rounded-full bg-gradient-to-b from-[#1b5e20] to-[#0f3813] text-white font-extrabold text-xs sm:text-sm shadow-sm transition hover:brightness-105"
+              >
+                🛡️ เมนูผู้ดูแลระบบ
+              </Link>
+            )}
           </div>
         </section>
 
-        <section style={styles.contentGrid}>
-          <div style={styles.panel}>
-            <div style={styles.panelHeader}>
-              <div>
-                <h3>สิทธิ์การใช้งาน</h3>
-                <p>Permissions ที่บัญชีของคุณได้รับ</p>
-              </div>
-              <span style={styles.count}>{permissions.length}</span>
-            </div>
+        {/* Alerts */}
+        {error && (
+          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-bold flex items-center justify-between">
+            <span>⚠️ {error}</span>
+            <button onClick={() => setError("")} className="text-xs opacity-70 hover:opacity-100">✕</button>
+          </div>
+        )}
 
-            <div style={styles.permissionList}>
-              {permissions.map(permission => (
-                <div key={permission} style={styles.permission}>
-                  <span style={styles.check}>✓</span>
-                  <span>{permission}</span>
-                  <span style={styles.granted}>Granted</span>
-                </div>
-              ))}
-              {permissions.length === 0 && <p>ไม่พบรายการสิทธิ์</p>}
-            </div>
+        {message && (
+          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-bold flex items-center justify-between">
+            <span>✅ {message}</span>
+            <button onClick={() => setMessage("")} className="text-xs opacity-70 hover:opacity-100">✕</button>
+          </div>
+        )}
+
+        {/* Stats Row */}
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+          <div className="bg-white rounded-3xl p-5 border border-[#e2ead8] shadow-xs">
+            <span className="text-3xl block mb-2">📦</span>
+            <p className="text-xs font-bold text-[#5d6e5a]">ผลผลิตในระบบทั้งหมด</p>
+            <p className="text-2xl font-black text-[#152e1c] mt-0.5">{products.length} รายการ</p>
           </div>
 
-          <div style={styles.panel}>
-            <div style={styles.panelHeader}>
-              <div>
-                <h3>เมนูที่คุณใช้งานได้</h3>
-                <p>แสดงตามสิทธิ์ของบัญชี</p>
-              </div>
-            </div>
+          <div className="bg-white rounded-3xl p-5 border border-[#e2ead8] shadow-xs">
+            <span className="text-3xl block mb-2">🌿</span>
+            <p className="text-xs font-bold text-[#5d6e5a]">มาตรฐานความปลอดภัย</p>
+            <p className="text-base sm:text-lg font-black text-[#2f8239] mt-1">GAP & GI ชุมชน 100%</p>
+          </div>
 
-            <div style={styles.quickLinks}>
-              {menu.filter(item => item.show && item.href !== "/dashboard").map(item => (
-                <a href={item.href} key={item.href} style={styles.quickLink}>
-                  <span style={styles.quickIcon}>{item.icon}</span>
-                  <span>{item.label}</span>
-                  <span style={styles.arrow}>→</span>
+          <div className="bg-white rounded-3xl p-5 border border-[#e2ead8] shadow-xs">
+            <span className="text-3xl block mb-2">🔗</span>
+            <p className="text-xs font-bold text-[#5d6e5a]">สถานะบัญชี Google</p>
+            <div className="mt-1 flex items-center justify-between">
+              <span className="text-xs font-bold text-[#152e1c]">
+                {currentUser?.googleLinked ? "เชื่อมต่อแล้ว" : "ยังไม่เชื่อมต่อ"}
+              </span>
+              {!currentUser?.googleLinked && (
+                <a
+                  href="/api/auth/google?mode=link"
+                  className="text-xs font-black text-[#2f8239] hover:underline"
+                >
+                  + เชื่อมบัญชี
                 </a>
-              ))}
+              )}
             </div>
           </div>
         </section>
 
-        <footer style={styles.footer}>
-          RBAC Management System · Next.js & MySQL
-        </footer>
+        {/* Product Management Area (if user has permissions) */}
+        {canCreate && (
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-black text-[#152e1c]">
+                  จัดการรายการผลผลิต
+                </h2>
+                <p className="text-xs sm:text-sm text-[#5d6e5a]">
+                  แก้ไขข้อมูล ราคา หรือจำนวนสต็อกสินค้า
+                </p>
+              </div>
+
+              {!showForm && (
+                <button
+                  type="button"
+                  onClick={openAddForm}
+                  className="px-5 py-2.5 rounded-full bg-gradient-to-b from-[#2f8239] to-[#1a5622] hover:brightness-105 text-white font-extrabold text-xs sm:text-sm shadow-sm transition active:scale-95 cursor-pointer"
+                >
+                  + เพิ่มผลผลิตใหม่
+                </button>
+              )}
+            </div>
+
+            {/* Add / Edit Form */}
+            {showForm && (
+              <div className="bg-white rounded-3xl p-6 sm:p-8 border-2 border-[#2f8239]/40 shadow-lg">
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-[#e2ead8]">
+                  <h3 className="text-lg font-black text-[#152e1c]">
+                    {editingId ? "✏️ แก้ไขข้อมูลผลผลิต" : "🌱 เพิ่มผลผลิตใหม่เข้าสู่ระบบ"}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowForm(false)}
+                    className="text-xs font-bold text-stone-500 hover:text-stone-800"
+                  >
+                    ยกเลิก
+                  </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-[#2e4732] mb-1">ชื่อผลผลิต</label>
+                    <input
+                      name="name"
+                      required
+                      value={form.name}
+                      onChange={handleChange}
+                      placeholder="เช่น ผักสลัดคอสอินทรีย์"
+                      className="w-full h-11 px-4 text-sm rounded-xl border border-[#d2dec8] bg-[#fbfdf9] outline-none focus:border-[#2f8239]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#2e4732] mb-1">หมวดหมู่</label>
+                    <select
+                      name="category"
+                      value={form.category}
+                      onChange={handleChange}
+                      className="w-full h-11 px-4 text-sm rounded-xl border border-[#d2dec8] bg-[#fbfdf9] outline-none focus:border-[#2f8239]"
+                    >
+                      <option value="veg">ผักสด</option>
+                      <option value="fruit">ผลไม้</option>
+                      <option value="grain">ข้าวและธัญพืช</option>
+                      <option value="processed">สินค้าแปรรูป</option>
+                      <option value="other">ทั่วไป</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#2e4732] mb-1">ราคา (บาท)</label>
+                    <input
+                      name="price"
+                      type="number"
+                      step="0.01"
+                      required
+                      value={form.price}
+                      onChange={handleChange}
+                      placeholder="เช่น 45"
+                      className="w-full h-11 px-4 text-sm rounded-xl border border-[#d2dec8] bg-[#fbfdf9] outline-none focus:border-[#2f8239]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#2e4732] mb-1">จำนวนคงเหลือ</label>
+                    <input
+                      name="stock"
+                      type="number"
+                      required
+                      value={form.stock}
+                      onChange={handleChange}
+                      placeholder="เช่น 50"
+                      className="w-full h-11 px-4 text-sm rounded-xl border border-[#d2dec8] bg-[#fbfdf9] outline-none focus:border-[#2f8239]"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-[#2e4732] mb-1">URL รูปภาพผลผลิต</label>
+                    <input
+                      name="image_url"
+                      value={form.image_url}
+                      onChange={handleChange}
+                      placeholder="https://..."
+                      className="w-full h-11 px-4 text-sm rounded-xl border border-[#d2dec8] bg-[#fbfdf9] outline-none focus:border-[#2f8239]"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2 flex justify-end gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowForm(false)}
+                      className="px-5 py-2.5 rounded-full border border-stone-300 text-stone-700 text-xs font-bold"
+                    >
+                      ยกเลิก
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="px-6 py-2.5 rounded-full bg-[#2f8239] hover:bg-[#236b28] text-white text-xs font-bold"
+                    >
+                      {saving ? "กำลังบันทึก..." : "บันทึกผลผลิต"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Products Table Overview */}
+        <section className="bg-white rounded-3xl p-6 border border-[#e2ead8] shadow-xs overflow-hidden">
+          <div className="flex items-center justify-between pb-4 border-b border-[#e2ead8] mb-4">
+            <h2 className="text-lg font-black text-[#152e1c]">
+              🌾 ผลผลิตสดใหม่ในระบบ ({products.length} รายการ)
+            </h2>
+            <Link
+              href="/"
+              className="text-xs font-bold text-[#2f8239] hover:underline"
+            >
+              ดูหน้าร้านค้าจริง ➔
+            </Link>
+          </div>
+
+          {loading ? (
+            <div className="py-8 text-center text-xs text-[#5d6e5a]">กำลังโหลดรายการผลผลิต...</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs sm:text-sm">
+                <thead>
+                  <tr className="border-b border-stone-100 text-[#5d6e5a]">
+                    <th className="py-3 px-3">ชื่อผลผลิต</th>
+                    <th className="py-3 px-3">หมวดหมู่</th>
+                    <th className="py-3 px-3">ราคา</th>
+                    <th className="py-3 px-3">คงเหลือ</th>
+                    {canUpdate && <th className="py-3 px-3 text-right">จัดการ</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100">
+                  {products.map((p) => (
+                    <tr key={p.id} className="hover:bg-[#fbfdfa]">
+                      <td className="py-3 px-3 font-bold text-[#152e1c]">
+                        <div className="flex items-center gap-2.5">
+                          {p.image_url && (
+                            <img
+                              src={p.image_url}
+                              alt={p.name}
+                              className="w-8 h-8 rounded-lg object-cover"
+                            />
+                          )}
+                          <span>{p.name}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-[#5d6e5a]">{p.category || "-"}</td>
+                      <td className="py-3 px-3 font-black text-[#2f8239]">฿{p.price}</td>
+                      <td className="py-3 px-3 text-[#5d6e5a]">{p.stock} {p.unit || "กก."}</td>
+                      {canUpdate && (
+                        <td className="py-3 px-3 text-right space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditForm(p)}
+                            className="px-2.5 py-1 rounded-md bg-[#edf6ea] text-[#1b5e20] text-xs font-bold hover:bg-[#e2f0dd]"
+                          >
+                            แก้ไข
+                          </button>
+                          {canDelete && (
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(p)}
+                              className="px-2.5 py-1 rounded-md bg-rose-50 text-rose-700 text-xs font-bold hover:bg-rose-100"
+                            >
+                              ลบ
+                            </button>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
       </main>
+
+      <PlukrakFooter />
     </div>
   );
 }
-
-const styles = {
-  app: {
-    minHeight: "100vh",
-    display: "flex",
-    background: "#faf9f2",
-    color: "#263b2c",
-    fontFamily: "inherit",
-  },
-  sidebar: {
-    width: 255,
-    minWidth: 255,
-    background: "#174c35",
-    color: "#fffdf4",
-    padding: "28px 18px",
-    display: "flex",
-    flexDirection: "column",
-    boxSizing: "border-box",
-  },
-  brand: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 45,
-  },
-  brandIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    background: "#dcebcf",
-    color: "#24583b",
-    display: "grid",
-    placeItems: "center",
-    fontSize: 24,
-    fontWeight: "bold",
-  },
-  menuTitle: {
-    color: "#b9d0bc",
-    fontSize: 12,
-    margin: "0 0 12px 10px",
-  },
-  menuItem: {
-    display: "flex",
-    gap: 12,
-    alignItems: "center",
-    padding: "13px 14px",
-    borderRadius: 10,
-    color: "#e0eadf",
-    textDecoration: "none",
-    marginBottom: 7,
-  },
-  activeMenu: {
-    background: "#dcebcf",
-    color: "#24583b",
-    fontWeight: "bold",
-  },
-  menuIcon: {
-    width: 22,
-    textAlign: "center",
-    fontSize: 19,
-  },
-  sidebarBottom: {
-    marginTop: "auto",
-    borderTop: "1px solid #426d53",
-    paddingTop: 22,
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: "50%",
-    background: "#dcebcf",
-    color: "#24583b",
-    display: "grid",
-    placeItems: "center",
-    fontWeight: "bold",
-  },
-  userName: {
-    display: "block",
-    fontSize: 12,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-  userRole: {
-    color: "#c3d7c4",
-    fontSize: 11,
-  },
-  logoutIcon: {
-    background: "transparent",
-    border: 0,
-    color: "#fff",
-    cursor: "pointer",
-    fontSize: 21,
-  },
-  main: {
-    flex: 1,
-    minWidth: 0,
-    padding: "35px 42px",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 15,
-    marginBottom: 28,
-  },
-  breadcrumb: {
-    color: "#82917f",
-    fontSize: 13,
-  },
-  heading: {
-    fontSize: 30,
-    margin: "8px 0",
-    color: "#24583b",
-  },
-  subheading: {
-    color: "#788777",
-    margin: 0,
-    fontSize: 14,
-  },
-  headerBadge: {
-    color: "#286744",
-    background: "#e3f1df",
-    padding: "10px 15px",
-    borderRadius: 30,
-    fontSize: 12,
-  },
-  welcome: {
-    background: "linear-gradient(120deg,#174c35,#47845b)",
-    color: "#fffdf4",
-    padding: "32px",
-    borderRadius: 20,
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 25,
-    boxShadow: "0 10px 25px rgba(31,78,52,0.12)",
-  },
-  welcomeEyebrow: {
-    fontSize: 11,
-    letterSpacing: 2,
-    opacity: 0.75,
-  },
-  welcomeIcon: {
-    fontSize: 55,
-    opacity: 0.7,
-  },
-  cards: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
-    gap: 16,
-    marginBottom: 24,
-  },
-  card: {
-    background: "#fffef9",
-    padding: 21,
-    borderRadius: 16,
-    border: "1px solid #e7e6d8",
-    minWidth: 0,
-    boxShadow: "0 5px 18px rgba(40,65,43,0.04)",
-  },
-  cardIcon: {
-    background: "#eaf1e5",
-    color: "#39784e",
-    width: 40,
-    height: 40,
-    borderRadius: 11,
-    display: "grid",
-    placeItems: "center",
-    fontSize: 19,
-  },
-  email: {
-    fontSize: 13,
-    overflowWrap: "anywhere",
-  },
-  contentGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
-    gap: 18,
-  },
-  panel: {
-    background: "#fffef9",
-    border: "1px solid #e7e6d8",
-    borderRadius: 17,
-    padding: 23,
-    minWidth: 0,
-    boxShadow: "0 5px 18px rgba(40,65,43,0.04)",
-  },
-  panelHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 18,
-  },
-  count: {
-    background: "#eaf1e5",
-    color: "#286744",
-    padding: "7px 12px",
-    borderRadius: 20,
-    fontWeight: "bold",
-  },
-  permissionList: {
-    display: "grid",
-    gap: 11,
-  },
-  permission: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    padding: 12,
-    background: "#f4f6ed",
-    borderRadius: 9,
-    fontSize: 13,
-    overflowWrap: "anywhere",
-  },
-  check: {
-    color: "#39784e",
-    fontWeight: "bold",
-  },
-  granted: {
-    marginLeft: "auto",
-    color: "#39784e",
-    fontSize: 10,
-  },
-  quickLinks: {
-    display: "grid",
-    gap: 10,
-  },
-  quickLink: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    padding: 14,
-    background: "#f4f6ed",
-    borderRadius: 10,
-    color: "#315b3e",
-    textDecoration: "none",
-    fontSize: 14,
-  },
-  quickIcon: {
-    fontSize: 20,
-    color: "#39784e",
-  },
-  arrow: {
-    marginLeft: "auto",
-  },
-  footer: {
-    textAlign: "center",
-    color: "#929b87",
-    fontSize: 12,
-    marginTop: 35,
-  },
-  loading: {
-    padding: 50,
-    textAlign: "center",
-    fontFamily: "inherit",
-    color: "#315b3e",
-  },
-};

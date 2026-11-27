@@ -7,3 +7,36 @@ build/
 .env.*.local
 .DS_Store
 *.pem
+
+# Environment files and backups
+.env.*
+!.env.example
+
+# Backup files - do not publish
+*.bak
+*.backup*
+*.before-*
+*.pre-*
+*.broken-backup
+*-backup.js
+backup*/
+backups/
+
+# Local AI development instructions
+.agents/
+AGENTS.md
+.vercel
+
+# Large binary files — ไม่ commit video ลง Git (ใช้ Cloudinary/CDN แทน)
+public/videos/*.mp4
+public/videos/*.mov
+public/videos/*.webm
+
+# Zip archives
+*.zip
+
+# Temporary saved JS snapshots
+app/page.js.before_*
+app/page.js.save
+app/*.js.save
+app/*.js.before_*

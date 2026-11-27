@@ -2,508 +2,306 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import PlukrakNavbar from "@/components/PlukrakNavbar";
+import PlukrakFooter from "@/components/PlukrakFooter";
+import Logo from "@/components/Logo";
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [role, setRole] = useState("user");
   const [showPassword, setShowPassword] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function handleRegister(event) {
     event.preventDefault();
+    if (loading) return;
+
+    setError("");
     setMessage("");
+
+    // Frontend validation — รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร
+    if (password.length < 8) {
+      setError("รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร");
+      return;
+    }
+
     setLoading(true);
 
     try {
       const response = await fetch("/api", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName, email, password }),
+        body: JSON.stringify({ fullName, email, password, role }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        setMessage(data.message || "สมัครสมาชิกไม่สำเร็จ");
-        return;
+        throw new Error(data.message || "สมัครสมาชิกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
       }
 
-      window.location.href = "/dashboard";
-    } catch {
-      setMessage("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
+      setMessage("สมัครสมาชิกสำเร็จเรียบร้อย! กำลังพาคุณเข้าสู่ระบบ...");
+      setTimeout(() => {
+        router.push("/login");
+      }, 1200);
+    } catch (err) {
+      setError(err.message || "เกิดข้อผิดพลาดในการสมัครสมาชิก");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <main className="register-page">
-      <Link href="/" className="register-brand">
-        <span className="brand-icon">🌱</span>
-        <span>
-          ปลูกรัก
-          <small>ตลาดผลผลิตจากชุมชน</small>
-        </span>
-      </Link>
+    <div className="min-h-screen flex flex-col justify-between bg-[#f6f4eb] text-[#152e1c]">
+      <PlukrakNavbar />
 
-      <div className="register-container">
-        <section className="register-visual">
-          <div className="visual-content">
-            <span className="visual-label">GROW TOGETHER WITH US</span>
-            <h1>
-              เริ่มต้นเติบโต
-              <br />
-              <span>ไปด้วยกัน</span>
-            </h1>
-            <p>
-              สมัครสมาชิกเพื่อร่วมเป็นส่วนหนึ่งของชุมชน
-              ที่เชื่อมโยงเกษตรกรไทยกับผู้บริโภคโดยตรง
-            </p>
+      <main className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8 relative">
+        {/* Soft background ambient leaves */}
+        <div className="absolute top-10 left-10 w-72 h-72 bg-emerald-400/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-10 right-10 w-72 h-72 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
 
-            <div className="visual-illustration">
-              <span>🌱</span>
-              <span>🥬</span>
-              <span>🍅</span>
-              <span>🥕</span>
-            </div>
-
-            <div className="visual-note">
-              💚 ผลผลิตจากชุมชน ส่งต่อด้วยความใส่ใจ
-            </div>
-          </div>
-        </section>
-
-        <section className="register-card">
-          <div className="card-icon">✨</div>
-          <div className="card-eyebrow">JOIN OUR COMMUNITY</div>
-          <h2>สมัครสมาชิก</h2>
-          <p className="card-description">
-            สร้างบัญชีใหม่เพื่อเริ่มต้นใช้งานปลูกรัก
-          </p>
-
-          <form onSubmit={handleRegister}>
-            <label htmlFor="fullName">ชื่อ-นามสกุล</label>
-            <div className="field-wrap">
-              <span>👤</span>
-              <input
-                id="fullName"
-                type="text"
-                placeholder="กรอกชื่อและนามสกุล"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                autoComplete="name"
-                required
-              />
-            </div>
-
-            <label htmlFor="email">อีเมล</label>
-            <div className="field-wrap">
-              <span>✉️</span>
-              <input
-                id="email"
-                type="email"
-                placeholder="กรอกอีเมลของคุณ"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-                required
-              />
-            </div>
-
-            <label htmlFor="password">รหัสผ่าน</label>
-            <div className="field-wrap">
-              <span>🔒</span>
-              <input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="อย่างน้อย 8 ตัวอักษร"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="new-password"
-                minLength={8}
-                required
-              />
-              <button
-                type="button"
-                className="show-password"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? "ซ่อน" : "แสดง"}
-              </button>
-            </div>
-
-            {message && (
-              <div className="error-message">
-                <span>⚠️</span>
-                {message}
+        {/* Unified Pluk Rak Card */}
+        <div className="w-full max-w-4xl bg-white rounded-[28px] sm:rounded-[36px] overflow-hidden shadow-[0_12px_36px_rgba(20,60,25,0.08)] border border-[#e2ead8] grid grid-cols-1 lg:grid-cols-12 relative z-10">
+          
+          {/* Left Column: Farm Community Welcome */}
+          <div className="lg:col-span-5 bg-gradient-to-br from-[#1b5e20] via-[#236b28] to-[#164e1c] text-white p-7 sm:p-9 flex flex-col justify-between relative overflow-hidden">
+            <div>
+              <div className="mb-6">
+                <Logo size="normal" showSubtitle={false} light={true} />
               </div>
-            )}
 
-            <button
-              type="submit"
-              className="register-submit"
-              disabled={loading}
-            >
-              {loading ? "กำลังสมัครสมาชิก..." : "สร้างบัญชีผู้ใช้งาน"}
-              {!loading && <span>→</span>}
-            </button>
-          </form>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-xs border border-white/20 text-xs font-black text-amber-300 mb-3">
+                <span>🌱 เครือข่ายเกษตรอินทรีย์ไทย</span>
+              </div>
 
-          <div className="login-prompt">
-            มีบัญชีอยู่แล้ว?
-            <Link href="/login"> เข้าสู่ระบบ</Link>
+              <h2 className="text-2xl sm:text-3xl font-black leading-tight text-white drop-shadow-sm">
+                ร่วมเติบโต <br />
+                <span className="text-[#a7f375]">ไปด้วยกันกับเรา</span>
+              </h2>
+
+              <p className="text-xs sm:text-sm text-emerald-100/90 mt-3 leading-relaxed font-medium">
+                ร่วมเป็นส่วนหนึ่งของเครือข่ายเกษตรกรชุมชน และผู้บริโภคที่ใส่ใจสุขภาพ ส่งตรงผลผลิตสดใหม่ ปลอดสารเคมี จากแปลงสู่ครัวคุณ
+              </p>
+            </div>
+
+            {/* Value Highlights */}
+            <div className="my-6 space-y-3">
+              <div className="flex items-center gap-3.5 bg-white/10 backdrop-blur-sm border border-white/20 px-4 py-3 rounded-2xl">
+                <span className="text-2xl">🥬</span>
+                <div className="text-xs">
+                  <p className="font-extrabold text-white">ผลผลิตสดแท้จากสวน</p>
+                  <p className="text-emerald-200/90">ตัดสดเช้าตรู่ ส่งตรงไม่ผ่านคนกลาง</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3.5 bg-white/10 backdrop-blur-sm border border-white/20 px-4 py-3 rounded-2xl">
+                <span className="text-2xl">🌾</span>
+                <div className="text-xs">
+                  <p className="font-extrabold text-white">สนับสนุนชุมชนชาวสวนไทย</p>
+                  <p className="text-emerald-200/90">รายได้ตรงสู่กลุ่มเกษตรกรอย่างยั่งยืน</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-[11px] text-emerald-200/80">
+              💚 มั่นใจในทุกคำสั่งซื้อด้วยระบบตรวจสอบย้อนกลับ GAP & GI
+            </div>
           </div>
 
-          <Link href="/" className="back-home">
-            ← กลับสู่หน้าหลัก
-          </Link>
-        </section>
-      </div>
+          {/* Right Column: Register Form */}
+          <div className="lg:col-span-7 p-7 sm:p-10 flex flex-col justify-between bg-white">
+            <div>
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h1 className="text-2xl sm:text-3xl font-black text-[#143d1a] tracking-tight">
+                    สมัครสมาชิกใหม่
+                  </h1>
+                  <p className="text-xs sm:text-sm text-[#5d6e5a] font-medium mt-0.5">
+                    ลงทะเบียนเข้าเป็นส่วนหนึ่งของตลาดปลูกรัก
+                  </p>
+                </div>
 
-      <footer className="register-footer">
-        © 2026 ปลูกรัก · เชื่อมโยงเกษตรกรไทยกับผู้บริโภค
-      </footer>
+                <Link
+                  href="/login"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-[#236b28] hover:text-[#164e1c] bg-[#edf6ea] hover:bg-[#e2f0dd] px-3.5 py-1.5 rounded-full transition"
+                >
+                  เข้าสู่ระบบ ➔
+                </Link>
+              </div>
 
-      <style jsx>{`
-        .register-page {
-          min-height: 100vh;
-          font-family: inherit;
-          padding: 90px 6% 30px;
-          background: #faf9f2;
-          color: #294333;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          position: relative;
-          overflow: hidden;
-        }
+              {/* Status Alert */}
+              {error && (
+                <div className="mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm flex items-start gap-2.5">
+                  <span className="text-rose-600 text-base leading-none mt-0.5">⚠️</span>
+                  <div className="flex-1 font-bold">{error}</div>
+                </div>
+              )}
 
-        .register-page::before,
-        .register-page::after {
-          content: "";
-          position: absolute;
-          border-radius: 50%;
-          background: #e8efdf;
-          pointer-events: none;
-        }
+              {message && (
+                <div className="mb-4 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm flex items-start gap-2.5">
+                  <span className="text-emerald-600 text-base leading-none mt-0.5">✅</span>
+                  <div className="flex-1 font-bold">{message}</div>
+                </div>
+              )}
 
-        .register-page::before {
-          width: 420px;
-          height: 420px;
-          top: -220px;
-          left: -130px;
-        }
+              {/* Register Form */}
+              <form onSubmit={handleRegister} className="space-y-3.5">
+                <div>
+                  <label
+                    htmlFor="reg-name"
+                    className="block text-xs font-bold text-[#2e4732] mb-1"
+                  >
+                    ชื่อ-นามสกุล หรือชื่อวิสาหกิจชุมชน
+                  </label>
+                  <input
+                    id="reg-name"
+                    type="text"
+                    required
+                    placeholder="เช่น สมชาย ใจดี หรือ สวนสุขใจ ปทุมธานี"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="w-full h-11 px-4 text-sm font-medium rounded-2xl border border-[#d2dec8] bg-[#fbfdf9] focus:bg-white focus:border-[#2f8239] focus:ring-3 focus:ring-[#2f8239]/20 outline-none transition"
+                  />
+                </div>
 
-        .register-page::after {
-          width: 500px;
-          height: 500px;
-          bottom: -300px;
-          right: -180px;
-        }
+                <div>
+                  <label
+                    htmlFor="reg-email"
+                    className="block text-xs font-bold text-[#2e4732] mb-1"
+                  >
+                    อีเมล
+                  </label>
+                  <input
+                    id="reg-email"
+                    type="email"
+                    required
+                    placeholder="name@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full h-11 px-4 text-sm font-medium rounded-2xl border border-[#d2dec8] bg-[#fbfdf9] focus:bg-white focus:border-[#2f8239] focus:ring-3 focus:ring-[#2f8239]/20 outline-none transition"
+                  />
+                </div>
 
-        .register-brand {
-          position: absolute;
-          top: 25px;
-          left: 6%;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          color: #315b40;
-          font-size: 25px;
-          font-weight: 800;
-          z-index: 2;
-        }
+                <div>
+                  <label
+                    htmlFor="reg-password"
+                    className="block text-xs font-bold text-[#2e4732] mb-1"
+                  >
+                    กำหนดรหัสผ่าน <span className="text-rose-600">(อย่างน้อย 8 ตัวอักษร)</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="reg-password"
+                      type={showPassword ? "text" : "password"}
+                      required
+                      minLength={8}
+                      placeholder="สร้างรหัสผ่านที่ปลอดภัย (อย่างน้อย 8 ตัวอักษร)"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className={`w-full h-11 pl-4 pr-16 text-sm font-medium rounded-2xl border bg-[#fbfdf9] focus:bg-white focus:ring-3 outline-none transition ${
+                        password.length > 0 && password.length < 8
+                          ? "border-rose-400 focus:border-rose-500 focus:ring-rose-200"
+                          : "border-[#d2dec8] focus:border-[#2f8239] focus:ring-[#2f8239]/20"
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#2f8239] hover:text-[#1b5e20] px-2 py-0.5 rounded-lg bg-[#eef7ec] transition"
+                    >
+                      {showPassword ? "ซ่อน" : "แสดง"}
+                    </button>
+                  </div>
+                  {/* Password strength hint */}
+                  {password.length > 0 && (
+                    <p className={`mt-1.5 text-[11px] font-semibold ${password.length < 8 ? "text-rose-500" : "text-emerald-600"}`}>
+                      {password.length < 8
+                        ? `⚠ ต้องการอีก ${8 - password.length} ตัวอักษร (ขั้นต่ำ 8 ตัว)`
+                        : "✓ รหัสผ่านได้มาตรฐาน"}
+                    </p>
+                  )}
+                </div>
 
-        .brand-icon {
-          font-size: 38px;
-        }
+                {/* Role Selection */}
+                <div>
+                  <label className="block text-xs font-bold text-[#2e4732] mb-1.5">
+                    ประเภทการใช้งาน
+                  </label>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setRole("user")}
+                      className={`p-2.5 rounded-2xl border text-left transition flex items-center gap-2.5 ${
+                        role === "user"
+                          ? "bg-[#edf6ea] border-[#2f8239] text-[#1b5e20] ring-2 ring-[#2f8239]/30 font-extrabold"
+                          : "bg-[#fbfdf9] border-[#d2dec8] text-[#556952] hover:bg-white font-medium"
+                      }`}
+                    >
+                      <span className="text-xl">👤</span>
+                      <div>
+                        <p className="text-xs font-extrabold">ผู้ซื้อทั่วไป</p>
+                        <p className="text-[10px] text-[#5d6e5a]">เลือกซื้อผลผลิตส่งถึงบ้าน</p>
+                      </div>
+                    </button>
 
-        .register-brand small {
-          display: block;
-          color: #829183;
-          font-size: 10px;
-          font-weight: 400;
-        }
+                    <button
+                      type="button"
+                      onClick={() => setRole("farmer")}
+                      className={`p-2.5 rounded-2xl border text-left transition flex items-center gap-2.5 ${
+                        role === "farmer"
+                          ? "bg-[#edf6ea] border-[#2f8239] text-[#1b5e20] ring-2 ring-[#2f8239]/30 font-extrabold"
+                          : "bg-[#fbfdf9] border-[#d2dec8] text-[#556952] hover:bg-white font-medium"
+                      }`}
+                    >
+                      <span className="text-xl">🧑‍🌾</span>
+                      <div>
+                        <p className="text-xs font-extrabold">เกษตรกร / สวน</p>
+                        <p className="text-[10px] text-[#5d6e5a]">ลงขายผลผลิตและจัดการแปลง</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
 
-        .register-container {
-          width: 100%;
-          max-width: 1020px;
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          background: white;
-          border-radius: 25px;
-          overflow: hidden;
-          box-shadow: 0 25px 70px rgba(41, 67, 51, .12);
-          position: relative;
-          z-index: 1;
-          margin: 20px 0 30px;
-        }
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full h-12 mt-3 rounded-full bg-gradient-to-b from-[#2f8239] to-[#1a5622] hover:brightness-105 text-white font-black text-sm sm:text-base shadow-[0_6px_18px_rgba(18,60,25,0.22)] active:scale-98 transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>กำลังสร้างบัญชี...</span>
+                    </>
+                  ) : (
+                    <span>+ ยืนยันการสมัครสมาชิก</span>
+                  )}
+                </button>
+              </form>
+            </div>
 
-        .register-visual {
-          background: linear-gradient(145deg, #315f40, #214b35);
-          color: white;
-          display: flex;
-          align-items: center;
-          padding: 50px 45px;
-          position: relative;
-          overflow: hidden;
-        }
+            {/* Footer Links */}
+            <div className="mt-5 pt-4 border-t border-[#e2ead8] text-center text-xs sm:text-sm font-bold">
+              <p className="text-[#5d6e5a]">
+                มีบัญชีผู้ใช้งานอยู่แล้ว?{" "}
+                <Link
+                  href="/login"
+                  className="text-[#236b28] hover:text-[#164e1c] underline underline-offset-2 ml-1"
+                >
+                  เข้าสู่ระบบที่นี่
+                </Link>
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
 
-        .register-visual::before {
-          content: "";
-          position: absolute;
-          width: 350px;
-          height: 350px;
-          border: 1px solid #ffffff20;
-          border-radius: 50%;
-          right: -150px;
-          top: -100px;
-        }
-
-        .visual-content {
-          position: relative;
-          z-index: 1;
-        }
-
-        .visual-label {
-          color: #c5dfb8;
-          font-size: 11px;
-          letter-spacing: 2px;
-          font-weight: 600;
-        }
-
-        .visual-content h1 {
-          font-size: clamp(30px, 3.5vw, 43px);
-          line-height: 1.5;
-          margin: 22px 0 15px;
-        }
-
-        .visual-content h1 span {
-          color: #c5df9d;
-        }
-
-        .visual-content > p {
-          color: #d4e2d4;
-          font-size: 14px;
-          line-height: 2;
-        }
-
-        .visual-illustration {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-top: 45px;
-          background: #ffffff16;
-          border: 1px solid #ffffff20;
-          padding: 18px;
-          border-radius: 17px;
-          width: fit-content;
-        }
-
-        .visual-illustration span {
-          font-size: 38px;
-        }
-
-        .visual-note {
-          color: #d3e6c8;
-          font-size: 12px;
-          margin-top: 20px;
-        }
-
-        .register-card {
-          padding: 42px 48px;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-        }
-
-        .card-icon {
-          width: 48px;
-          height: 48px;
-          display: grid;
-          place-items: center;
-          background: #edf4e8;
-          border-radius: 15px;
-          font-size: 24px;
-          margin-bottom: 15px;
-        }
-
-        .card-eyebrow {
-          color: #71946b;
-          font-size: 11px;
-          font-weight: 600;
-          letter-spacing: 1px;
-        }
-
-        .register-card h2 {
-          font-size: 31px;
-          color: #294b35;
-          margin: 5px 0;
-        }
-
-        .card-description {
-          color: #89958a;
-          font-size: 13px;
-          margin: 5px 0 20px;
-        }
-
-        .register-card label {
-          display: block;
-          font-size: 13px;
-          font-weight: 600;
-          margin: 15px 0 8px;
-          color: #405b47;
-        }
-
-        .field-wrap {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          border: 1px solid #e5eae0;
-          border-radius: 10px;
-          padding: 0 13px;
-          height: 47px;
-          background: #fcfdf9;
-        }
-
-        .field-wrap:focus-within {
-          border-color: #619467;
-          box-shadow: 0 0 0 3px #61946718;
-        }
-
-        .field-wrap > span {
-          font-size: 15px;
-        }
-
-        .field-wrap input {
-          width: 100%;
-          min-width: 0;
-          border: 0;
-          outline: none;
-          background: transparent;
-          font-size: 13px;
-          box-shadow: none !important;
-        }
-
-        .show-password {
-          border: 0;
-          background: transparent;
-          color: #619467;
-          font-size: 11px;
-          white-space: nowrap;
-        }
-
-        .error-message {
-          margin-top: 15px;
-          padding: 12px;
-          border-radius: 9px;
-          background: #fff1ed;
-          color: #bd4d3e;
-          font-size: 12px;
-          display: flex;
-          gap: 8px;
-          align-items: center;
-        }
-
-        .register-submit {
-          width: 100%;
-          height: 49px;
-          margin-top: 23px;
-          background: #477b51;
-          color: white;
-          border: 0;
-          border-radius: 10px;
-          font-weight: 600;
-          font-size: 14px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 12px;
-          box-shadow: 0 7px 15px #477b5128;
-        }
-
-        .register-submit:hover:not(:disabled) {
-          background: #315e3b;
-          transform: translateY(-2px);
-        }
-
-        .register-submit:disabled {
-          opacity: .65;
-          cursor: wait;
-        }
-
-        .login-prompt {
-          text-align: center;
-          color: #829083;
-          font-size: 12px;
-          margin-top: 22px;
-        }
-
-        .login-prompt a {
-          color: #477b51;
-          font-weight: 700;
-        }
-
-        .back-home {
-          text-align: center;
-          color: #829083;
-          font-size: 12px;
-          margin-top: 20px;
-        }
-
-        .back-home:hover {
-          color: #477b51;
-        }
-
-        .register-footer {
-          position: relative;
-          z-index: 1;
-          color: #929c8d;
-          font-size: 11px;
-          text-align: center;
-        }
-
-        @media (max-width: 760px) {
-          .register-page {
-            padding: 90px 18px 25px;
-          }
-
-          .register-brand {
-            top: 20px;
-            left: 22px;
-          }
-
-          .register-container {
-            grid-template-columns: 1fr;
-            max-width: 470px;
-          }
-
-          .register-visual {
-            padding: 28px;
-          }
-
-          .visual-content h1 {
-            font-size: 27px;
-            margin: 12px 0;
-          }
-
-          .visual-illustration {
-            margin-top: 18px;
-            padding: 10px 15px;
-          }
-
-          .visual-illustration span {
-            font-size: 29px;
-          }
-
-          .register-card {
-            padding: 32px 25px;
-          }
-        }
-      `}</style>
-    </main>
+      <PlukrakFooter />
+    </div>
   );
 }

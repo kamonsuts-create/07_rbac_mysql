@@ -34,13 +34,9 @@ async function checkPermission(permission) {
   return { session };
 }
 
-// GET: ดูข่าวทั้งหมด
+// GET: ดูข่าวทั้งหมด (สาธารณะสำหรับทุกคน หรือสมาชิก)
 export async function GET() {
   try {
-    const auth = await checkPermission("news:read");
-
-    if (auth.error) return auth.error;
-
     const [news] = await pool.execute(`
       SELECT
         n.id,

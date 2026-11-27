@@ -19,6 +19,7 @@ export async function GET() {
          u.id,
          u.full_name,
          u.email,
+         u.google_sub,
          r.code AS role,
          r.name AS role_name
        FROM users u
@@ -45,6 +46,7 @@ export async function GET() {
         email: user.email,
         role: user.role,
         roleName: user.role_name,
+        googleLinked: Boolean(user.google_sub),
       },
       permissions,
     });
